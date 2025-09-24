@@ -9,16 +9,16 @@ Truffle
 Ganache (GUI ou CLI)
 ```
 # Como Executar
-## Instale as Dependências Globais
-```bash
-npm install -g truffle
-npm install -g ganache
-```
 # Clone o repositório e entre na pasta:
 
 ```bash
 git clone <url-do-repo>
 cd C:\Blockchain
+```
+# Instale as Dependências Globais
+```bash
+npm install -g truffle
+npm install -g ganache
 ```
 
 # Instale dependências locais:
