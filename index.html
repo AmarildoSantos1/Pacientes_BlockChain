@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cadastro de Pacientes - Ganache + web3.js</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width:900px; margin:24px auto; padding:12px; }
+    h1 { font-size:20px; }
+    .card { border:1px solid #ddd; padding:12px; border-radius:8px; margin-bottom:12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04) }
+    label { display:block; margin-top:8px; font-weight:600; }
+    input[type=text], input[type=number], textarea, select { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; }
+    button { margin-top:10px; padding:8px 12px; cursor:pointer; border-radius:6px; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+  </style>
+</head>
+<body>
+<h1>Cadastro de Pacientes (Ganache + web3.js)</h1>
+
+<div class="card">
+  <label>RPC / Provider (fallback para Ganache):</label>
+  <input id="rpcUrl" type="text" value="http://127.0.0.1:7545" />
+  <label style="margin-top:10px">Contract Address:</label>
+  <input id="contractAddress" placeholder="0x2cE296409D9249096291B82a6e403899003A6eA8" />
+  <div style="margin-top:8px;">
+    <button id="btnConnect">Conectar</button>
+    <button id="btnDetectAccounts">Detectar contas</button>
+  </div>
+  <p id="connectionStatus"><strong>Estado:</strong> desconectado</p>
+  <label>Trocar de conta:</label>
+  <select id="accountSelect"></select>
+</div>
+
+<div class="card">
+  <h3>Cadastrar Paciente</h3>
+  <label>Nome</label>
+  <input id="nome" type="text"/>
+  <label>CPF</label>
+  <input id="cpf" type="text"/>
+  <label>Idade</label>
+  <input id="idade" type="number" min="0"/>
+  <label>Endereço</label>
+  <textarea id="endereco" rows="2"></textarea>
+  <div class="row">
+    <button id="btnCadastrar">Cadastrar</button>
+    <button id="btnCheckCpf">Verificar se já cadastrado</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Consultar Paciente</h3>
+  <label>CPF</label>
+  <input id="cpfConsulta" type="text"/>
+  <div class="row">
+    <button id="btnConsultar">Consultar</button>
+  </div>
+  <div id="consultaResultado" style="margin-top:8px;"></div>
+</div>
+
+<script>
+const contractABI = [
+  {"inputs":[{"internalType":"string","name":"_nome","type":"string"},{"internalType":"string","name":"_cpf","type":"string"},{"internalType":"uint256","name":"_idade","type":"uint256"},{"internalType":"string","name":"_endereco","type":"string"}],"name":"cadastrarPaciente","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"string","name":"_cpf","type":"string"}],"name":"consultarPaciente","outputs":[{"internalType":"string","name":"nome","type":"string"},{"internalType":"string","name":"cpf","type":"string"},{"internalType":"uint256","name":"idade","type":"uint256"},{"internalType":"string","name":"endereco","type":"string"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"string","name":"_cpf","type":"string"}],"name":"cpfJaCadastrado","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
+];
+
+let web3;
+let contract;
+let activeAccount = null;
+let accounts = [];
+
+const statusEl = document.getElementById('connectionStatus');
+const accountSelect = document.getElementById('accountSelect');
+
+async function connect(){
+  const rpc = document.getElementById('rpcUrl').value || "http://127.0.0.1:7545";
+  if(window.ethereum){
+    try {
+      web3 = new Web3(window.ethereum);
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      accounts = await web3.eth.getAccounts();
+      activeAccount = accounts[0];
+      statusEl.innerHTML = '<strong>Estado:</strong> conectado via MetaMask/window.ethereum';
+    } catch(err){
+      web3 = new Web3(new Web3.providers.HttpProvider(rpc));
+      accounts = await web3.eth.getAccounts();
+      activeAccount = accounts[0];
+      statusEl.innerHTML = '<strong>Estado:</strong> conectado via HTTP fallback';
+    }
+  } else {
+    web3 = new Web3(new Web3.providers.HttpProvider(rpc));
+    accounts = await web3.eth.getAccounts();
+    activeAccount = accounts[0];
+    statusEl.innerHTML = '<strong>Estado:</strong> conectado via HTTP fallback';
+  }
+
+  populateAccountsDropdown();
+
+  const addr = document.getElementById('contractAddress').value.trim();
+  if(addr && web3){
+    initContract(addr);
+  }
+}
+
+function populateAccountsDropdown(){
+  accountSelect.innerHTML = '';
+  accounts.forEach(acc => {
+    const opt = document.createElement('option');
+    opt.value = acc;
+    opt.text = acc;
+    accountSelect.appendChild(opt);
+  });
+  accountSelect.value = activeAccount;
+}
+
+accountSelect.addEventListener('change', (e) => {
+  activeAccount = e.target.value;
+});
+
+function initContract(address){
+  if(!web3) {
+    alert('Conecte primeiro (Clique em Conectar).');
+    return;
+  }
+  try {
+    contract = new web3.eth.Contract(contractABI, address);
+    statusEl.innerHTML = `<strong>Estado:</strong> contrato apontado em ${address}`;
+  } catch(e){
+    alert('Erro ao inicializar contrato: ' + e.message);
+  }
+}
+
+document.getElementById('btnConnect').addEventListener('click', connect);
+
+document.getElementById('btnDetectAccounts').addEventListener('click', async () => {
+  if(!web3) { await connect(); return; }
+  try {
+    if(window.ethereum){
+      accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    }
+    if(!accounts || accounts.length===0){
+      accounts = await web3.eth.getAccounts();
+    }
+    if(accounts && accounts.length > 0){
+      activeAccount = accounts[0];
+      populateAccountsDropdown();
+      alert('Contas detectadas e atualizadas.');
+    } else {
+      alert('Nenhuma conta detectada.');
+    }
+  } catch(e){
+    alert('Erro detectando contas: ' + e.message);
+  }
+});
+
+document.getElementById('contractAddress').addEventListener('change', (e) => {
+  const addr = e.target.value.trim();
+  if(addr) initContract(addr);
+});
+
+document.getElementById('btnCadastrar').addEventListener('click', async () => {
+  if(!contract) return alert('Insira o endereço do contrato e clique Conectar.');
+  const nome = document.getElementById('nome').value.trim();
+  const cpf  = document.getElementById('cpf').value.trim();
+  const idade = parseInt(document.getElementById('idade').value || '0', 10);
+  const endereco = document.getElementById('endereco').value.trim();
+
+  if(!nome || !cpf || !idade || idade <= 12){
+    return alert('Preencha corretamente. Idade deve ser maior que 12.');
+  }
+
+  try {
+    const gasEstimate = await contract.methods.cadastrarPaciente(nome, cpf, idade, endereco).estimateGas({ from: activeAccount });
+    await contract.methods.cadastrarPaciente(nome, cpf, idade, endereco)
+      .send({ from: activeAccount, gas: Math.floor(gasEstimate * 1.2) });
+    alert('Paciente cadastrado com sucesso!');
+  } catch (err){
+    alert('Erro ao cadastrar: ' + (err.message || err));
+  }
+});
+
+document.getElementById('btnCheckCpf').addEventListener('click', async () => {
+  if(!contract) return alert('Insira o endereço do contrato e clique Conectar.');
+  const cpf = document.getElementById('cpf').value.trim();
+  if(!cpf) return alert('Informe o CPF no campo acima.');
+  try {
+    const existe = await contract.methods.cpfJaCadastrado(cpf).call();
+    alert(`CPF ${cpf} cadastrado? ${existe}`);
+  } catch(e){
+    alert('Erro check CPF: ' + e.message);
+  }
+});
+
+document.getElementById('btnConsultar').addEventListener('click', async () => {
+  if(!contract) return alert('Insira o endereço do contrato e clique Conectar.');
+  const cpf = document.getElementById('cpfConsulta').value.trim();
+  if(!cpf) return alert('Informe o CPF para consulta.');
+  try {
+    const resp = await contract.methods.consultarPaciente(cpf).call();
+    const nome = resp[0] || resp.nome;
+    const cpfRet = resp[1] || resp.cpf;
+    const idade = resp[2] || resp.idade;
+    const endereco = resp[3] || resp.endereco;
+    const out = `Nome: ${nome}\nCPF: ${cpfRet}\nIdade: ${idade}\nEndereço: ${endereco}`;
+    document.getElementById('consultaResultado').innerText = out;
+  } catch(err){
+    alert('Erro ao consultar: ' + (err.message || err));
+  }
+});
+</script>
+</body>
+</html>
