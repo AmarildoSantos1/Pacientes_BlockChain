@@ -167,10 +167,17 @@ document.getElementById('btnCadastrar').addEventListener('click', async () => {
   const idade = parseInt(document.getElementById('idade').value || '0', 10);
   const endereco = document.getElementById('endereco').value.trim();
 
-  if(!nome || !cpf || !idade || idade <= 12){
+ if(!idade || idade <= 12){
     return alert('Preencha corretamente. Idade deve ser maior que 12.');
   }
 
+  if(!nome){
+    return alert('Preencha seu nome.')
+  }
+
+  if(!cpf){
+    return alert('Preencha seu CPF.')
+  }
   try {
     const gasEstimate = await contract.methods.cadastrarPaciente(nome, cpf, idade, endereco).estimateGas({ from: activeAccount });
     await contract.methods.cadastrarPaciente(nome, cpf, idade, endereco)
